@@ -7,7 +7,8 @@
 \usage{
 genodds(response, group, strata=NULL,
         alpha=0.05,ties="split",
-        nnt=FALSE,verbose=FALSE,upper=TRUE)
+        nnt=FALSE,verbose=FALSE,upper=TRUE,
+        assume_no_effect=FALSE)
 }
 \arguments{
 \item{response}{A (non-empty) vector. Gives the outcome measure.
@@ -21,10 +22,12 @@ Gives treatment blocks to separate comparisons.}
 
 \item{alpha}{The acceptable type 1 error used in the test.}
 
-\item{ties}{A string specifying how ties should be treated. See Details.}
+\item{ties}{A string specifying how ties should be treated.
+Should be equal to "split" 0.5 for WMW Odds,
+or "drop" for Agresti's GenOR.}
 
 \item{nnt}{A boolean.
-If \code{TRUE}, then print number needed to treat in addition to generalized odds ratios.}
+If \code{TRUE}, then print number needed to treat in addition to generalised odds ratios.}
 
 \item{verbose}{A boolean.
 If \code{TRUE}, then print both pooled odds and relative risk ratio matrices
@@ -33,6 +36,9 @@ regardless of result of statistical test.}
 \item{upper}{A boolean specifying if the upper triangle
 of relative risk ratios should be printed.
 If \code{FALSE}, lower triangle is used instead.}
+
+\item{assume_no_effect}{A boolean indicating if p-values and confidence intervals should be calculated
+using pooled_SElnnull (if TRUE) or pooled_SElnodds (if FALSE).}
 }
 \value{
 A list with class "\code{Genodds}" containing the following:
@@ -44,7 +50,7 @@ A list with class "\code{Genodds}" containing the following:
     \item{pooled_p}{The p-value of the test of pooled log(odds) = 1.}
     \item{pooled_rel_statistic}{Statistic of test that strata odds are equal.}
     \item{pooled_rel_p}{p-value for test that strata odds are equal.}
-    \item{relative_lnodds}{A matrix giving the log of the ratio of odds between strata (generalized relative risk ratio).}
+    \item{relative_lnodds}{A matrix giving the log of the ratio of odds between strata (generalised relative risk ratio).}
     \item{relative_selnodds}{A matrix containing the standard error of the log(relative risk ratio).}
     \item{results}{A list containing a summary of each strata measure.}
     \item{param.record}{A list containing parameters used in the test.}
@@ -65,7 +71,7 @@ The opposite direction can be calculated by either calculating 1/genodds,
 or by specifying \code{response=1-response} in function input.
 
 If \code{nnt=TRUE}, the Number Needed to Treat (NNT) is printed.
-NNT is a health economics measure and is related to generalized
+NNT is a health economics measure and is related to generalised
 odds ratios through the formula NNT=1+2/(GenOR-1).
 It measures the expected number of patients required for a
 treatment to have impacted a patient's outcome.
@@ -80,11 +86,16 @@ the confidence interval for NNT is given as the union of disjoint
 intervals.
 
 \code{ties} changes how ties are treated. If \code{"split"} is provided,
-then ties are equally split between favoring both groups
+then ties are equally split between favouring both groups
 (following the approach set out by O'Brien et. al. (2006)).
 If \code{"drop"} is provided, then ties are ignored
 (following the approach set out by Agresti (1980)).
 By default, \code{"split"} is used.
+
+If \code{assume_no_effect==TRUE}, use O'Brien's method for calculating standard
+error under null for the purposes of calculating p-values and confidence intervals.
+If \code{assume_no_effect==FALSE} (the default option), then p-values and confidence intervals
+will be calculated using standard error instead.
 
 If \code{strata} is specified, generalized odds ratios are calculated
 separately for each individual strata. If in-stratum odds ratios are not

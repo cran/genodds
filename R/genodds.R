@@ -7,7 +7,8 @@
 #' @usage
 #' genodds(response, group, strata=NULL,
 #'         alpha=0.05,ties="split",
-#'         nnt=FALSE,verbose=FALSE,upper=TRUE)
+#'         nnt=FALSE,verbose=FALSE,upper=TRUE,
+#'         assume_no_effect=FALSE)
 #'
 #' @param response A (non-empty) vector. Gives the outcome measure.
 #'                 If a factor, level order is used to determine ranking of outcomes.
@@ -16,15 +17,19 @@
 #' @param strata An optional factor vector of equal length to \code{response}.
 #'               Gives treatment blocks to separate comparisons.
 #' @param alpha The acceptable type 1 error used in the test.
-#' @param ties A string specifying how ties should be treated. See Details.
+#' @param ties A string specifying how ties should be treated.
+#'             Should be equal to "split" 0.5 for WMW Odds,
+#'             or "drop" for Agresti's GenOR.
 #' @param nnt A boolean.
-#'            If \code{TRUE}, then print number needed to treat in addition to generalized odds ratios.
+#'            If \code{TRUE}, then print number needed to treat in addition to generalised odds ratios.
 #' @param verbose A boolean.
 #'                If \code{TRUE}, then print both pooled odds and relative risk ratio matrices
 #'                regardless of result of statistical test.
 #' @param upper A boolean specifying if the upper triangle
 #'              of relative risk ratios should be printed.
 #'              If \code{FALSE}, lower triangle is used instead.
+#' @param assume_no_effect A boolean indicating if p-values and confidence intervals should be calculated
+#'                         using pooled_SElnnull (if TRUE) or pooled_SElnodds (if FALSE).
 #'
 #' @return A list with class "\code{Genodds}" containing the following:
 #' \describe{
@@ -35,7 +40,7 @@
 #'     \item{pooled_p}{The p-value of the test of pooled log(odds) = 1.}
 #'     \item{pooled_rel_statistic}{Statistic of test that strata odds are equal.}
 #'     \item{pooled_rel_p}{p-value for test that strata odds are equal.}
-#'     \item{relative_lnodds}{A matrix giving the log of the ratio of odds between strata (generalized relative risk ratio).}
+#'     \item{relative_lnodds}{A matrix giving the log of the ratio of odds between strata (generalised relative risk ratio).}
 #'     \item{relative_selnodds}{A matrix containing the standard error of the log(relative risk ratio).}
 #'     \item{results}{A list containing a summary of each strata measure.}
 #'     \item{param.record}{A list containing parameters used in the test.}
@@ -53,7 +58,7 @@
 #' or by specifying \code{response=1-response} in function input.
 #'
 #' If \code{nnt=TRUE}, the Number Needed to Treat (NNT) is printed.
-#' NNT is a health economics measure and is related to generalized
+#' NNT is a health economics measure and is related to generalised
 #' odds ratios through the formula NNT=1+2/(GenOR-1).
 #' It measures the expected number of patients required for a
 #' treatment to have impacted a patient's outcome.
@@ -68,11 +73,16 @@
 #' intervals.
 #'
 #' \code{ties} changes how ties are treated. If \code{"split"} is provided,
-#' then ties are equally split between favoring both groups
+#' then ties are equally split between favouring both groups
 #' (following the approach set out by O'Brien et. al. (2006)).
 #' If \code{"drop"} is provided, then ties are ignored
 #' (following the approach set out by Agresti (1980)).
 #' By default, \code{"split"} is used.
+#'
+#' If \code{assume_no_effect==TRUE}, use O'Brien's method for calculating standard
+#' error under null for the purposes of calculating p-values and confidence intervals.
+#' If \code{assume_no_effect==FALSE} (the default option), then p-values and confidence intervals
+#' will be calculated using standard error instead.
 #'
 #' If \code{strata} is specified, generalized odds ratios are calculated
 #' separately for each individual strata. If in-stratum odds ratios are not
@@ -112,7 +122,7 @@
 #'
 #' @export
 genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
-                    nnt=FALSE, verbose=FALSE,upper=TRUE
+                    nnt=FALSE, verbose=FALSE,upper=TRUE, assume_no_effect=FALSE
                     )
 {
 
@@ -129,7 +139,6 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   {
     stop("Response and Group are different lengths")
   }
-
 
   # Remove NA values and warn
   if(is.null(strata))
@@ -157,7 +166,7 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   }
 
 
-  if (length(unique(group))!=2)
+  if(length(unique(group))!=2)
   {
     stop("Group must take on exactly 2 values")
   }
@@ -238,22 +247,18 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
     # Smooth p across groups and do this again.
     # This code is WET as hell, but whatever
 
-    # This only seems to agree with Stata's
-    # genodds routine up to 5 decimal places.
-    # It's unclear if this is just a language
-    # issue or an actual bug, needs more investigation
-
-    p=apply(p,1,mean)
-    p=cbind(p,p)
+    p=outer(apply(p,1,sum),apply(p,2,sum))
 
     Rt=p[,2:1]
     Rs=get_Rs(p)
     Rd=get_Rd(p)
 
     # Redistribute ties
-
-    Rs=Rs+contr_fav*Rt
-    Rd=Rd+contr_fav*Rt
+    if(!is.na(contr_fav))
+    {
+      Rs=Rs+contr_fav*Rt
+      Rd=Rd+contr_fav*Rt
+    }
 
     Pc=sum(p*Rs)
     Pd=sum(p*Rd)
@@ -261,7 +266,9 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
     SEnull=2/Pd*(sum(p*(1*Rd-Rs)^2)/N)^0.5
     SElnnull=SEnull/1
 
-    p=pnorm(abs(log(odds)),sd=SElnodds,lower.tail=FALSE)*2
+    SE <- ifelse(assume_no_effect,SElnnull,SElnodds)
+
+    p=pnorm(abs(log(odds)),sd=SE,lower.tail=FALSE)*2
 
     out=list(odds=odds,conf.int=conf.int,p=p,SEodds=SEodds,SEnull=SEnull,
              xtab=crosstab)
@@ -282,18 +289,12 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
                 do.call("sum",lapply(results,function(x) x$odds^2/x$SEodds^2 ))
 
   pooled_SElnodds=sqrt(1/do.call("sum",lapply(results,function(x) x$odds^2/x$SEodds^2)))
-
-  pooled_lnconf.int=qnorm(c(alpha/2,1-alpha/2),mean=pooled_lnodds,sd=pooled_SElnodds)
-
-#   Do we weight by lnodds under null SE?
-#   pooled_lnoddsnull=do.call("sum",lapply(results,function(x) x$odds^2 * log(x$odds)/x$SEnull^2))/
-#                     do.call("sum",lapply(results,function(x) x$odds^2/x$SEodds^2))
-
   pooled_SElnnull=sqrt(1/do.call("sum",lapply(results,function(x) 1/x$SEnull^2)))
 
-  pooled_p=pnorm(abs(pooled_lnodds),sd=pooled_SElnodds,lower.tail=FALSE)*2
+  SE <- ifelse(assume_no_effect,pooled_SElnnull,pooled_SElnodds)
 
-
+  pooled_lnconf.int=qnorm(c(alpha/2,1-alpha/2),mean=pooled_lnodds,sd=SE)
+  pooled_p=pnorm(abs(pooled_lnodds),sd=SE,lower.tail=FALSE)*2
 
   ###########################################
   # Get measures of comparisons across layers
@@ -502,7 +503,7 @@ print.Genodds<-function(x,...){
 
     if (x$pooled_rel_p<=x$param.record$alpha | verbose==TRUE)
     {
-      cat("\n\nGeneralized relative risk ratios among strata:\n\n")
+      cat("\n\nGeneralised relative risk ratios among strata:\n\n")
 
       print_triangle(exp(x$relative_lnodds),
                      upper=upper,diag=TRUE)

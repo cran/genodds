@@ -1,8 +1,8 @@
 Package: genodds
 Type: Package
 Title: Generalized Odds Ratios
-Version: 1.0.0
-Date: 2019-08-14
+Version: 1.1.0
+Date: 2021-11-20
 Encoding: UTF-8
 Authors@R: person("Hannah","Johns", role=c("aut","cre"),email="htjohns@gmail.com",comment=c(ORCID="0000-0003-2135-0504"))
 Maintainer: Hannah Johns <htjohns@gmail.com>
@@ -19,10 +19,10 @@ LazyData: TRUE
 Depends: R (>= 2.10)
 Imports: Rcpp (>= 0.12.3)
 LinkingTo: Rcpp
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.1
 Suggests: testthat (>= 2.1.0)
 NeedsCompilation: yes
-Packaged: 2019-08-20 14:30:17 UTC; hannah
+Packaged: 2021-11-20 04:55:15 UTC; htjoh
 Author: Hannah Johns [aut, cre] (<https://orcid.org/0000-0003-2135-0504>)
 Repository: CRAN
-Date/Publication: 2019-08-21 09:30:06 UTC
+Date/Publication: 2021-11-20 22:30:09 UTC
