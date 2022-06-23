@@ -7,8 +7,9 @@
 #' @usage
 #' genodds(response, group, strata=NULL,
 #'         alpha=0.05,ties="split",
-#'         nnt=FALSE,verbose=FALSE,upper=TRUE,
-#'         assume_no_effect=FALSE)
+#'         nnt=FALSE,verbose=FALSE,upper=TRUE, suppress_interpretation=FALSE,
+#'         assume_no_effect=FALSE,
+#'         permutation_test=FALSE, nPermutations=5000)
 #'
 #' @param response A (non-empty) vector. Gives the outcome measure.
 #'                 If a factor, level order is used to determine ranking of outcomes.
@@ -28,8 +29,11 @@
 #' @param upper A boolean specifying if the upper triangle
 #'              of relative risk ratios should be printed.
 #'              If \code{FALSE}, lower triangle is used instead.
+#' @param suppress_interpretation A boolean specifying if the interpretable summary statements of results should be suppressed.
 #' @param assume_no_effect A boolean indicating if p-values and confidence intervals should be calculated
 #'                         using pooled_SElnnull (if TRUE) or pooled_SElnodds (if FALSE).
+#' @param permutation_test A boolean specifying if a permutation test should be performed on the data
+#' @param nPermutations The number of permutations to use in the permutation test
 #'
 #' @return A list with class "\code{Genodds}" containing the following:
 #' \describe{
@@ -95,7 +99,20 @@
 #' are printed regardless of if the between-stratum odds ratios are
 #' significantly different.
 #'
-#' Options \code{verbose}, \code{nnt} and \code{upper}
+#' Permutation testing is performed following the approach suggested by Howard et al. (2012),
+#' where the probability of a random observation from one group achieving a higher score
+#' than a patient in another group is calculated (given there is a difference between the scores),
+#' and then the \code{group} labels are randomly shuffled to guarantee the null hypothesis
+#' of no difference between groups is true. The permutation test p-value is the proportion of such
+#' permutations which result in a test statistic more extreme than what was observed on the original
+#' data, forming a two-tail test. This procedure is equivalent to that provided by Agresti's generalised
+#' odds ratio, and is implemented here for both methods of handling \code{ties}.
+#'
+#' By default, \code{print.genodds()} will report an interpretable summary of the test statistic
+#' following a loosely modified form of the statements suggested by Howard et al. (2012).
+#' This may be suppressed by specifying \code{suppress_interpretation=TRUE}.
+#'
+#' Options \code{verbose}, \code{nnt}, \code{upper}, and \code{suppress_interpretation}
 #' may be re-specified when using print method.
 #'
 #' @examples
@@ -119,12 +136,20 @@
 #' modified Rankin Scale using generalized odds ratios.
 #' \emph{International Journal of Stroke}, 9(8), 999-1005.
 #'
+#' Howard, G., Waller, J. L., Voeks, J. H., Howard, V. J., Jauch, E. C.,
+#' Lees, K. R., ... & Hess, D. C. (2012). A simple, assumption-free,
+#' and clinically interpretable approach for analysis of modified Rankin
+#' outcomes. \emph{Stroke}, 43(3), 664-669.
 #'
 #' @export
 genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
-                    nnt=FALSE, verbose=FALSE,upper=TRUE, assume_no_effect=FALSE
+                    nnt=FALSE, verbose=FALSE,upper=TRUE,
+                    suppress_interpretation=FALSE,
+                    assume_no_effect=FALSE,
+                    permutation_test=FALSE, nPermutations=5000
                     )
 {
+
 
   # Check inputs are non-empty
   if(length(response)==0)
@@ -139,6 +164,7 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   {
     stop("Response and Group are different lengths")
   }
+
 
   # Remove NA values and warn
   if(is.null(strata))
@@ -166,7 +192,7 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   }
 
 
-  if(length(unique(group))!=2)
+  if (length(unique(group))!=2)
   {
     stop("Group must take on exactly 2 values")
   }
@@ -176,6 +202,64 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   {
     group=as.factor(group)
   }
+
+
+  # Get ties treatment
+  # Set up like this to allow future
+  # expansion such as assume all ties favour control
+  # or all ties favour treatment
+  if(ties=="split")
+  {
+    contr_fav=0.5
+  }
+  else if (ties=="drop")
+  {
+    contr_fav=NA
+  }
+  else
+  {
+    stop("Invalid ties option specified")
+  }
+
+
+  # If we're going to run permutation tests, do it here. Everything after this point
+  if(permutation_test & !is.null(strata)) stop("Permutation testing not supported for stratified data")
+
+  if(permutation_test){
+
+    get_prop_treatment <- function(response,group,ties){
+      prop_treatment <- as.matrix(table(response,group))
+      prop_treatment <- outer(prop_treatment[,1],prop_treatment[,2])
+      prop_treatment <- prop_treatment/sum(prop_treatment)
+
+      if(ties=="split")
+      {
+        prop_treatment <- sum(prop_treatment[upper.tri(prop_treatment)])+0.5*sum(diag(prop_treatment))
+      }
+      else if(ties=="drop")
+      {
+        prop_treatment <- sum(prop_treatment[upper.tri(prop_treatment)])/(1-sum(diag(prop_treatment)))
+      }
+      prop_treatment
+    }
+
+    prop_treatment <- get_prop_treatment(response,group,ties)
+
+    permutation_pVal <- sapply(1:nPermutations, function(i){
+      get_prop_treatment(response,group[order(runif(length(group)))],ties)
+    })
+
+    permutation_pVal <- mean(abs(0.5-permutation_pVal) > abs(0.5-prop_treatment))
+
+  }
+  else
+  {
+    permutation_pVal <- NULL
+  }
+
+
+
+
 
   # If no strata is specified,
   # create a dummy stratum containing all data
@@ -196,22 +280,6 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   }
 
 
-  # Get ties treatment
-  # Set up like this to allow future
-  # expansion such as assume all ties favour control
-  # or all ties favour treatment
-  if(ties=="split")
-  {
-    contr_fav=0.5
-  }
-  else if (ties=="drop")
-  {
-    contr_fav=NA
-  }
-  else
-  {
-    stop("Invalid ties option specified")
-  }
 
   # The test for an individual block/strata/layer is done in this function.
   # This will be called later on to generate odds for each stratum
@@ -236,16 +304,18 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
     Pc=sum(p*Rs)
     Pd=sum(p*Rd)
 
-
     odds=Pc/Pd
 
     SEodds=2/Pd*(sum(p*(odds*Rd-Rs)^2)/N)^0.5
     SElnodds=SEodds/odds
 
-    conf.int=exp( qnorm(c(alpha/2,1-alpha/2),mean=log(odds),sd=SElnodds) )
-
     # Smooth p across groups and do this again.
     # This code is WET as hell, but whatever
+
+    # This only seems to agree with Stata's
+    # genodds routine up to 5 decimal places.
+    # It's unclear if this is just a language
+    # issue or an actual bug, needs more investigation
 
     p=outer(apply(p,1,sum),apply(p,2,sum))
 
@@ -256,18 +326,20 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
     # Redistribute ties
     if(!is.na(contr_fav))
     {
-      Rs=Rs+contr_fav*Rt
+      Rs=Rs+(1-contr_fav)*Rt
       Rd=Rd+contr_fav*Rt
     }
 
     Pc=sum(p*Rs)
     Pd=sum(p*Rd)
 
+
     SEnull=2/Pd*(sum(p*(1*Rd-Rs)^2)/N)^0.5
     SElnnull=SEnull/1
 
     SE <- ifelse(assume_no_effect,SElnnull,SElnodds)
 
+    conf.int=exp( qnorm(c(alpha/2,1-alpha/2),mean=log(odds),sd=SE) )
     p=pnorm(abs(log(odds)),sd=SE,lower.tail=FALSE)*2
 
     out=list(odds=odds,conf.int=conf.int,p=p,SEodds=SEodds,SEnull=SEnull,
@@ -292,9 +364,9 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
   pooled_SElnnull=sqrt(1/do.call("sum",lapply(results,function(x) 1/x$SEnull^2)))
 
   SE <- ifelse(assume_no_effect,pooled_SElnnull,pooled_SElnodds)
-
   pooled_lnconf.int=qnorm(c(alpha/2,1-alpha/2),mean=pooled_lnodds,sd=SE)
   pooled_p=pnorm(abs(pooled_lnodds),sd=SE,lower.tail=FALSE)*2
+
 
   ###########################################
   # Get measures of comparisons across layers
@@ -325,6 +397,7 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
            pooled_SElnodds=pooled_SElnodds,
            pooled_SElnnull=pooled_SElnnull,
            pooled_p=pooled_p,
+           permutation_pVal=permutation_pVal,
            relative_lnodds=lnrel,
            relative_selnodds=SElnrel,
            pooled_rel_statistic=pooled_rel_statistic,
@@ -332,7 +405,7 @@ genodds <- function(response, group, strata=NULL,alpha=0.05,ties="split",
            results=results,
            param.record=list(response=response, group=group, strata=strata,
                              alpha=alpha,ties=ties,
-                             nnt=nnt, verbose=verbose,upper=upper)
+                             nnt=nnt, verbose=verbose,upper=upper,suppress_interpretation=suppress_interpretation)
            )
   class(out)=c("Genodds",class(out))
 
@@ -347,6 +420,7 @@ print.Genodds<-function(x,...){
   nnt <- x$param.record$nnt
   verbose <- x$param.record$verbose
   upper <- x$param.record$upper
+  suppress_interpretation <- x$param.record$suppress_interpretation
 
   if("nnt" %in% names(args)){
     nnt <- args$nnt
@@ -356,6 +430,9 @@ print.Genodds<-function(x,...){
   }
   if("upper" %in% names(args)){
    upper <- args$upper
+  }
+  if("suppress_interpretation" %in% names(args)){
+    suppress_interpretation <- args$suppress_interpretation
   }
 
   # It only makes sense to return either the upper or
@@ -404,6 +481,8 @@ print.Genodds<-function(x,...){
                 x$results[[i]]$conf.int[1],
                 x$results[[i]]$conf.int[2],
                 x$results[[i]]$p))
+
+    if(!is.null(x$permutation_pVal)) cat(sprintf("\n   (Permutation test for proportion: p=%1.4f)",x$permutation_pVal))
 
     if(nnt)
     {
@@ -517,6 +596,45 @@ print.Genodds<-function(x,...){
 
   }
   cat("\n")
+
+  if(!suppress_interpretation){
+    # Get Howard-style summary of results
+    cat("--------------------------------------------")
+    if(length(proportions)==1) cat("\n")
+
+
+    lapply(x$results,function(y){
+      pwc <- outer(y$xtab[,1],y$xtab[,2])
+      out <- c(sum(pwc[upper.tri(pwc)]),sum(diag(pwc)),sum(pwc[lower.tri(pwc)]))
+      out <- out/sum(out)
+      names(out) <- c(colnames(y$xtab)[2],"tie",colnames(y$xtab)[1])
+      return(out)
+    }) -> proportions
+
+    proportions
+    for(i in names(proportions)){
+      if(length(proportions)>1) cat(sprintf("\nIn the %s stratum:\n",i))
+      cat(sprintf("\tOf 100 patients given %s instead of %s:\n",
+                  names(proportions[[i]])[1],names(proportions[[i]])[3]
+      ))
+
+      cat(sprintf("\t  * %2.2f will score higher with %s\n",
+                  100*proportions[[i]][1],names(proportions[[i]])[1]
+      ))
+
+      cat(sprintf("\t  * %2.2f will score higher with %s\n",
+                  100*proportions[[i]][3],names(proportions[[i]])[3]
+      ))
+
+      cat(sprintf("\t  * %2.2f appear the same with either treatment",
+                  100*proportions[[i]][2]
+      ))
+      cat("\n")
+    }
+
+  }
+
+
 
   return(invisible(x))
 }

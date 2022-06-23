@@ -1,12 +1,14 @@
 #' Power Calculations for Generalized Odds Ratios
 #' @description Provides power analysis for Agresti's Generalized Odds Ratios.
 #'
-#' @param p0 A numeric vector containing the probabilities in control group.
-#' @param p1 A numeric vector containing the probabilities in treatment group.
-#' @param N  A numeric vector containing total sample sizes.
+#' @param p0 A numeric vector contianing the probabilities in control group.
+#' @param p1 A numeric vector contianing the probabilities in treatment group.
+#' @param N  A numeirc vector containing total sample sizes.
 #' @param power A numeric vector containing required  total sample size.
 #' @param alpha Type 1 error.
 #' @param ties A string specifying how ties should be treated.
+#'             Should be equal to "split" 0.5 for WMW Odds,
+#'             or "drop" for Agresti's GenOR.
 #' @param w A numeric vector of length 2 specifying the relative weighting
 #'          of sample size between treatment groups.
 #' @param direction Direction for hypothesis test.

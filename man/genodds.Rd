@@ -7,8 +7,9 @@
 \usage{
 genodds(response, group, strata=NULL,
         alpha=0.05,ties="split",
-        nnt=FALSE,verbose=FALSE,upper=TRUE,
-        assume_no_effect=FALSE)
+        nnt=FALSE,verbose=FALSE,upper=TRUE, suppress_interpretation=FALSE,
+        assume_no_effect=FALSE,
+        permutation_test=FALSE, nPermutations=5000)
 }
 \arguments{
 \item{response}{A (non-empty) vector. Gives the outcome measure.
@@ -37,8 +38,14 @@ regardless of result of statistical test.}
 of relative risk ratios should be printed.
 If \code{FALSE}, lower triangle is used instead.}
 
+\item{suppress_interpretation}{A boolean specifying if the interpretable summary statements of results should be suppressed.}
+
 \item{assume_no_effect}{A boolean indicating if p-values and confidence intervals should be calculated
 using pooled_SElnnull (if TRUE) or pooled_SElnodds (if FALSE).}
+
+\item{permutation_test}{A boolean specifying if a permutation test should be performed on the data}
+
+\item{nPermutations}{The number of permutations to use in the permutation test}
 }
 \value{
 A list with class "\code{Genodds}" containing the following:
@@ -108,7 +115,20 @@ If \code{verbose=TRUE} is supplied, both pooled odds and relative risk ratios
 are printed regardless of if the between-stratum odds ratios are
 significantly different.
 
-Options \code{verbose}, \code{nnt} and \code{upper}
+Permutation testing is performed following the approach suggested by Howard et al. (2012),
+where the probability of a random observation from one group achieving a higher score
+than a patient in another group is calculated (given there is a difference between the scores),
+and then the \code{group} labels are randomly shuffled to guarantee the null hypothesis
+of no difference between groups is true. The permutation test p-value is the proportion of such
+permutations which result in a test statistic more extreme than what was observed on the original
+data, forming a two-tail test. This procedure is equivalent to that provided by Agresti's generalised
+odds ratio, and is implemented here for both methods of handling \code{ties}.
+
+By default, \code{print.genodds()} will report an interpretable summary of the test statistic
+following a loosely modified form of the statements suggested by Howard et al. (2012).
+This may be suppressed by specifying \code{suppress_interpretation=TRUE}.
+
+Options \code{verbose}, \code{nnt}, \code{upper}, and \code{suppress_interpretation}
 may be re-specified when using print method.
 }
 \examples{
@@ -132,4 +152,9 @@ S., Campbell, B. C., Davis, S. M. & Donnan, G. A. (2014).
 An improved method for simple, assumption-free ordinal analysis of the
 modified Rankin Scale using generalized odds ratios.
 \emph{International Journal of Stroke}, 9(8), 999-1005.
+
+Howard, G., Waller, J. L., Voeks, J. H., Howard, V. J., Jauch, E. C.,
+Lees, K. R., ... & Hess, D. C. (2012). A simple, assumption-free,
+and clinically interpretable approach for analysis of modified Rankin
+outcomes. \emph{Stroke}, 43(3), 664-669.
 }

@@ -16,17 +16,19 @@ genodds.power(
 )
 }
 \arguments{
-\item{p0}{A numeric vector containing the probabilities in control group.}
+\item{p0}{A numeric vector contianing the probabilities in control group.}
 
-\item{p1}{A numeric vector containing the probabilities in treatment group.}
+\item{p1}{A numeric vector contianing the probabilities in treatment group.}
 
-\item{N}{A numeric vector containing total sample sizes.}
+\item{N}{A numeirc vector containing total sample sizes.}
 
 \item{power}{A numeric vector containing required  total sample size.}
 
 \item{alpha}{Type 1 error.}
 
-\item{ties}{A string specifying how ties should be treated.}
+\item{ties}{A string specifying how ties should be treated.
+Should be equal to "split" 0.5 for WMW Odds,
+or "drop" for Agresti's GenOR.}
 
 \item{w}{A numeric vector of length 2 specifying the relative weighting
 of sample size between treatment groups.}
